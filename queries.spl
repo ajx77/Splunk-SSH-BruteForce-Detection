@@ -1,0 +1,33 @@
+# SSH brute-force detection in Splunk - all searches used in this project
+# Data: Loghub SSH sample (SSH_2k.log), index="ssh". Time range: All time.
+
+# 1. Failed logins by source IP
+index="ssh" "Failed password"
+| rex "from (?<src_ip>\d+\.\d+\.\d+\.\d+) port"
+| stats count by src_ip
+| sort - count
+
+# 2. Brute-force bursts (more than 10 failures per minute from one IP) - also the alert search
+index="ssh" "Failed password"
+| rex "from (?<src_ip>\d+\.\d+\.\d+\.\d+) port"
+| bin _time span=1m
+| stats count by _time, src_ip
+| where count>10
+| sort - count
+
+# 3. Top targeted usernames
+index="ssh" "Failed password"
+| rex "Failed password for (?:invalid user )?(?<username>\S+) from"
+| stats count by username
+| sort - count
+| head 10
+
+# 4. Attack timeline by source IP
+index="ssh" "Failed password"
+| rex "from (?<src_ip>\d+\.\d+\.\d+\.\d+) port"
+| timechart span=5m count by src_ip limit=5
+
+# 5. Successful logins (check for success after failures)
+index="ssh" "Accepted password"
+| rex "for (?<username>\S+) from (?<src_ip>\S+)"
+| table _time username src_ip
